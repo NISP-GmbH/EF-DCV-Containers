@@ -1,0 +1,181 @@
+version: "2.1"
+
+services:
+  dcvserver:
+    image: nispgmbh/ef-dcv-container:dcvsrv
+    hostname: dcvserver
+    container_name: dcvserver-nisp
+    expose:
+      - "8443/tcp"
+    ports:
+      - "8443:8443/udp"
+      - "8443:8443/tcp"
+    restart: 'always'
+    privileged: true
+    tty: true
+    env_file:
+      - .env
+    volumes:
+      - shared-volume:/shared-volume
+      - dcvsrv_data:/var/lib/dcv-session-manager-agent
+      - ./conf/license.dcv:/etc/dcv/license.dcv
+      - slurmcluster_etc_slurm:/etc/slurm
+    networks:
+      - network-nisp
+  dcvsm:
+    image: nispgmbh/ef-dcv-container:dcvsm
+    hostname: dcvsm
+    container_name: dcvsm-nisp
+    expose:
+      - "8448"
+      - "8445"
+    restart: 'always'
+    env_file:
+      - .env
+    volumes:
+      - shared-volume:/shared-volume
+      - dcvsm_data:/var/lib/dcvsmbroker
+    networks:
+      - network-nisp
+    command: ["/bin/bash", "/opt/container-tools/dcvsm_init_script.sh"]
+  nginx:
+    image: nispgmbh/ef-dcv-container:nginx
+    hostname: nginx
+    container_name: nginx-nisp
+    ports:
+      - "80:80"
+      - "443:443"
+    restart: 'always'
+    depends_on:
+      - dcvserver
+      - enginframe
+    env_file:
+      - .env
+    networks:
+      - network-nisp
+    command: ["/bin/bash", "/opt/container-tools/nginx_init_script.sh"]
+
+  enginframe:
+    container_name: enginframe-nisp
+    hostname: enginframe
+    image: nispgmbh/ef-dcv-container:enginframe
+    expose:
+      - "8009"
+    restart: 'always'
+    volumes:
+      - shared-volume:/shared-volume
+      - ./conf/license.ef:/opt/container-tools/license.ef
+      - ./conf/sssd.conf:/etc/sssd/sssd.conf
+      - enginframe_data:/opt/nisp
+      - slurmcluster_etc_slurm:/etc/slurm
+    env_file:
+      - .env
+    networks:
+      - network-nisp
+    command: ["/bin/bash", "/opt/container-tools/enginframe_init_script.sh"]
+
+  mysql:
+    image: mariadb:10.10
+    hostname: mysql
+    container_name: mysql-nisp
+    restart: 'always'
+    env_file:
+      - .env
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - network-nisp
+
+  slurmdbd:
+    image: nispgmbh/ef-dcv-container:slurm-nisp
+    hostname: slurmdbd
+    container_name: slurmdbd-nisp
+    volumes:
+      - slurmcluster_etc_munge:/etc/munge
+      - slurmcluster_etc_slurm:/etc/slurm
+      - slurmcluster_slurm_log:/var/log/slurm
+      - /sys/fs/cgroup:/sys/fs/cgroup
+      - shared-volume:/shared-volume
+    expose:
+      - "6819"
+    depends_on:
+      - mysql
+    networks:
+      - network-nisp
+    restart: 'always'
+    command: ["slurmdbd"]
+
+  slurmctld:
+    image: nispgmbh/ef-dcv-container:slurm-nisp
+    hostname: slurmctld
+    container_name: slurmctld-nisp
+    volumes:
+      - slurmcluster_etc_munge:/etc/munge
+      - slurmcluster_etc_slurm:/etc/slurm
+      - slurmcluster_slurm_jobdir:/data
+      - slurmcluster_slurm_log:/var/log/slurm
+      - /sys/fs/cgroup:/sys/fs/cgroup
+      - shared-volume:/shared-volume
+    expose:
+      - "6817"
+    depends_on:
+      - "slurmdbd"
+    networks:
+      - network-nisp
+    restart: 'always'
+    command: ["slurmctld"]
+
+  c1:
+    image: nispgmbh/ef-dcv-container:slurm-nisp
+    hostname: c1
+    container_name: slurm_c1-nisp
+    volumes:
+      - slurmcluster_etc_munge:/etc/munge
+      - slurmcluster_etc_slurm:/etc/slurm
+      - slurmcluster_slurm_jobdir:/data
+      - slurmcluster_slurm_log:/var/log/slurm
+      - /sys/fs/cgroup:/sys/fs/cgroup
+      - shared-volume:/shared-volume
+    expose:
+      - "6818"
+    depends_on:
+      - "slurmctld"
+    networks:
+      - network-nisp
+    restart: 'always'
+    command: ["slurmd"]
+
+  c2:
+    image: nispgmbh/ef-dcv-container:slurm-nisp
+    command: ["slurmd"]
+    hostname: c2
+    container_name: slurm_c2-nisp
+    volumes:
+      - slurmcluster_etc_munge:/etc/munge
+      - slurmcluster_etc_slurm:/etc/slurm
+      - slurmcluster_slurm_jobdir:/data
+      - slurmcluster_slurm_log:/var/log/slurm
+      - /sys/fs/cgroup:/sys/fs/cgroup
+      - shared-volume:/shared-volume
+    expose:
+      - "6818"
+    depends_on:
+      - "slurmctld"
+    networks:
+      - network-nisp
+    restart: 'always'
+    command: ["slurmd"]
+
+volumes:
+  shared-volume:
+  dcvsm_data:
+  enginframe_data:
+  dcvsrv_data:
+  slurmcluster_etc_munge:
+  slurmcluster_etc_slurm:
+  slurmcluster_slurm_jobdir:
+  slurmcluster_slurm_log:
+  mysql_data:
+networks:
+  network-nisp:
+    driver: bridge
