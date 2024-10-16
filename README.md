@@ -31,13 +31,6 @@ Features:
 
 ## How to startup the containers services
 
-1. Clone this git repository
-2. Edit the .env file and set at leat this variable (very simple, is not?):
-```bash
-EF_DOMAIN=myefcontainer.mydomain.com
-```
-3. Add into conf/ folder the license.ef (license for EnginFrame) and the license.dcv (license for DCV Server). You need to use those names.
-4. Execute the docker compose plugin (you need to be inside of the git clone):
 ```bash
 docker-compose up -d
 ```
